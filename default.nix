@@ -7,13 +7,13 @@ with import (fetchTarball {
 
 let
   drv = (haskellPackages.override {
-  # overrides = self: super: rec {
+  #  overrides = self: super: rec {
   #   # fix https://hydra.nixos.org/build/86436153
-  #   bloodhound = self.callPackage ./nix/bloodhound.nix {
+  #    bloodhound = self.callPackage ./nix/bloodhound.nix {
   #     containers = self.callPackage ./nix/containers.nix {};
-  #   };
+  #    };
     # aeson = self.callPackage ./nix/aeson.nix {};
-  #};
+  #  };
   }).callCabal2nix "espurge" ./. {};
 in if lib.inNixShell then drv.env.overrideAttrs (old: {
   buildInputs = old.buildInputs ++ [ haskellPackages.ghcid cabal-install ];
