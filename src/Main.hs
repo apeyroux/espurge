@@ -4,8 +4,12 @@
 module Main where
 
 import           Control.Concurrent.Async
+import           Control.Monad.Catch
+import           Control.Monad.Error.Class
 import           Control.Monad.IO.Class
 import           Data.Aeson
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.ByteString.Lazy.Char8 as LBSC8
 import           Data.Monoid ((<>))
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
@@ -15,12 +19,12 @@ import           Network.HTTP.Client
 import           Network.HTTP.Client.TLS
 import           Options.Applicative
 
-
 data Instance = Instance {
   iName :: String
   , iUrl :: String
   , iEsLogin :: String
   , iEsPassword :: String
+  , iSnaps :: [String]
   } deriving (Generic, Show, Eq)
 
 instance FromJSON Instance where
@@ -29,6 +33,7 @@ instance FromJSON Instance where
     <*> v .: "instanceurl"
     <*> v .: "eslogin"
     <*> v .: "espassword"
+    <*> v .: "snaps"
 
 newtype OptArgs = OptArgs {
   oaInventaire :: FilePath
@@ -52,26 +57,20 @@ purgeInstance i = do
   let runBH' = withBH (tlsManagerSettings { managerResponseTimeout = responseTimeoutNone }) srvES
   -- srepos <- runBH' $ getSnapshotRepos AllSnapshotRepos
   -- print srepos
-  lsnaps <- runBH' $ getSnapshots (SnapshotRepoName (T.pack $ iName i)) AllSnapshots
-  case lsnaps of
-    Left e -> print "e"
-    Right l -> do
-      let lx = tail $ reverse l
-      -- print $ length lx
-      mapM_ (\s -> do
-                let sn = snapshotName (snapInfoName s)
-                putStrLn $ "Start delete " <> show sn
-                _ <- runBH' $ deleteSnapshot (SnapshotRepoName (T.pack $ iName i)) (SnapshotName sn)
-                putStrLn $ "End delete " <> show sn
-            ) lx
+  -- lsnaps <- runBH' $ getSnapshots (SnapshotRepoName (T.pack $ iName i)) AllSnapshots
+  mapM_ (\s -> do
+            putStrLn $ "Start delete " <> s
+            r <- runBH' $ deleteSnapshot (SnapshotRepoName (T.pack $ iName i)) (SnapshotName (T.pack s))
+            putStrLn $ "End delete " <> s
+        ) (iSnaps i)
 
 main :: IO ()
 main = do
   args <- execParser (info parseArgs fullDesc)
-  i <- decodeFileStrict (oaInventaire args) :: IO (Maybe [Instance])
-  case i of
-    Nothing -> putStrLn "I cant decode inventaire file"
-    Just instances -> 
+  li <- eitherDecodeFileStrict (oaInventaire args) :: IO (Either String [Instance])
+  case li of
+    Left e -> putStrLn $ "I cant decode inventaire file " <> e
+    Right instances -> do
       mapConcurrently_ (\i -> do
                            putStrLn $ "Lancement du traitement de " <> iName i <> " ..."
                            purgeInstance i

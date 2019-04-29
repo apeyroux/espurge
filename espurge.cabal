@@ -20,9 +20,12 @@ executable espurge
                      , aeson
                      , async
                      , bloodhound
+                     , exceptions
+                     , bytestring
                      , filepath
                      , http-client
                      , http-client-tls
+                     , mtl
                      , optparse-applicative
                      , text
   hs-source-dirs:      src
